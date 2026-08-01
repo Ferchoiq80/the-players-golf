@@ -55,7 +55,8 @@ st.markdown("""
 GOOGLE_DRIVE_FILE_ID = "1Cs9iLLf2xRiQfbaY8iviS1MgwUONvYeq"
 URL_EXCEL = f"https://docs.google.com/spreadsheets/d/{GOOGLE_DRIVE_FILE_ID}/export?format=xlsx"
 
-@st.cache_data(ttl=300)
+# CORRECCIÓN AQUÍ: Usamos cache_resource para objetos de tipo ExcelFile
+@st.cache_resource(ttl=300)
 def cargar_datos_drive():
     xls = pd.ExcelFile(URL_EXCEL)
     return xls
