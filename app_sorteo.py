@@ -6,6 +6,7 @@ import urllib.parse
 import os
 import base64
 import json
+import io
 import streamlit.components.v1 as components
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
@@ -53,7 +54,6 @@ st.markdown("""
 # ==========================================
 try:
     df = pd.read_excel('THE PLAYERS.xlsm', sheet_name='Indices', header=5)
-    # Limpiar nombres de columnas
     df.columns = df.columns.str.strip()
 except Exception as e:
     st.error("❌ No se pudo leer el archivo. Verifica que 'THE PLAYERS.xlsm' esté en la misma carpeta.")
@@ -68,6 +68,8 @@ df_validos = df.dropna(subset=['Nombre', 'Apellidos']).copy()
 if df_validos.empty:
     st.warning("⚠️ No se encontraron jugadores en la hoja 'Indices'.")
     st.stop()
+
+total_jugadores = len(df_validos)
 
 # ==========================================
 # BARRA LATERAL (SIDEBAR)
@@ -84,13 +86,13 @@ with st.sidebar:
     iniciar_sorteo = st.button("🎲 Iniciar Sorteo en Vivo", type="primary", use_container_width=True)
 
 # ==========================================
-# CABECERA
+# CABECERA DINÁMICA
 # ==========================================
 html_cabecera = f"""
 <div style="text-align: center; margin-top: 20px; margin-bottom: 5px;">
     <h1 style="color: #002244; font-family: 'Georgia', serif; margin: 0; padding: 0; white-space: nowrap; font-size: 2.2rem;">⛳ Sorteo Oficial de Foursomes</h1>
     <div style="background-color: #e8f4f8; border-left: 5px solid #002244; border-right: 5px solid #002244; padding: 5px 15px; border-radius: 5px; display: inline-block; margin-top: 5px;">
-        <span style="font-size: 18px; font-weight: bold; color: #002244;">🏌️‍♂️ Total de Jugadores para esta Jornada: {len(df_validos)}</span>
+        <span style="font-size: 18px; font-weight: bold; color: #002244;">🏌️‍♂️ Total de Jugadores para esta Jornada: {total_jugadores}</span>
     </div>
 </div>
 """
@@ -231,33 +233,38 @@ if iniciar_sorteo:
         grupos_wa.append({'equipo': num_equipo, 'jugadores': jugadores_grupo})
                 
     # ==========================================
-    # GUARDADO MÁGICO EN EL EXCEL ABIERTO
+    # REGISTRO Y GUARDADO
     # ==========================================
     st.markdown("---")
     st.markdown("### 💾 Registro y Compartir")
     
+    # Intento de escritura en vivo con xlwings (Para ejecución local con Excel abierto)
     try:
         import xlwings as xw
-        # Conectarse al Excel que ya tienes abierto en tu pantalla
         wb = xw.Book('THE PLAYERS.xlsm')
         hoja = wb.sheets['Equipos']
         
         datos_para_pegar = df_export.values.tolist()
-        
-        # 1. Pegamos los datos a partir de la celda B2
         hoja.range('B2').value = datos_para_pegar
         
-        # 2. DEFINIR FORMATO EXACTO (Alto de fila y Orientación horizontal)
         rango_modificado = hoja.range(f'B2:J{len(df_export) + 1}')
         rango_modificado.api.RowHeight = 15.5
-        rango_modificado.api.Orientation = 0  # <--- Esto fuerza que todo el texto sea 100% horizontal
+        rango_modificado.api.Orientation = 0  # Texto en horizontal
         
-        st.success("✅ **¡Éxito!** Los datos se escribieron en vivo en tu hoja 'Equipos'. Filas a 15.5 y texto en horizontal.")
+        st.success("✅ **¡Éxito!** Los datos se escribieron en vivo en tu hoja 'Equipos' de tu Excel abierto.")
+    except Exception:
+        # En la nube (Streamlit Cloud) o si Excel no está abierto localmente, ofrece botón de descarga
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            df_export.to_excel(writer, index=False, sheet_name='Equipos')
         
-    except ImportError:
-        st.error("❌ Faltó instalar la herramienta. Abre CMD y escribe: `pip install xlwings`")
-    except Exception as e:
-        st.error(f"⚠️ No se pudo inyectar la información en tu Excel. Asegúrate de tener 'THE PLAYERS.xlsm' abierto en tu pantalla. Error técnico: {e}")
+        st.download_button(
+            label="📥 Descargar Foursomes en Excel (.xlsx)",
+            data=buffer.getvalue(),
+            file_name="Foursomes_The_Players.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
 
     # Crear el mensaje para WhatsApp
     mensaje_wa = "*⛳ RESULTADOS DEL SORTEO - THE PLAYERS ⛳*\n\n"
